@@ -1,3 +1,4 @@
+#define DATA_POINTS 10
 
 volatile boolean intstate = 0;
 uint32_t t0; // to calc frequency
@@ -14,6 +15,11 @@ int setvalue = 0;
 int16_t error, errorlast;
 int32_t errorinc;
 uint32_t tmrc;
+// Filter variables
+int16_t data[DATA_POINTS];
+int16_t avg;
+int32_t total = 0;
+int16_t indx = 0;
 
 void setup()
 {
@@ -27,7 +33,6 @@ void setup()
 
 void loop()
 {
-    
     tperiod();
     /*
     if(millis() - tmrp > 1000)
@@ -48,23 +53,45 @@ void loop()
         tmrp = millis();
     }
     */
-    if(millis() - tmrc > 20)
+   
+    if(millis() - tmrc > 10)
     {
         assignvalues();
         pwm_out = pid_out();
         analogWrite(motor_pin, pwm_out);
         tmrc = millis();
     }
-
+    
     if(millis() - tmrp > 100)
     {
         Serial.print(setvalue);
         Serial.print(",");
-        Serial.print(f());
+        Serial.print(f()); //<===
         Serial.println();
        
         tmrp = millis();
     }
+    
+}
+
+int16_t filter()
+{
+    total = total - data[indx];
+    data[indx] = f();
+    total = total + data[indx];
+    indx++;
+    if(indx >= DATA_POINTS)
+    {
+        indx = 0;
+    }    
+    return (total / DATA_POINTS);
+    /*
+    Serial.print(analogRead(A0));
+    Serial.print(",");
+    Serial.print(avg);
+    Serial.println();
+    delay(100);
+    */
 }
 
 int16_t vc_read(int16_t inv)
@@ -77,8 +104,8 @@ int16_t vc_read(int16_t inv)
 void assignvalues()
 {
     setvalue = 14 * vc_read(analogRead(A3));
-    kp =  ((float)vc_read(analogRead(A2))) / 100;
-    ki = ((float)vc_read(analogRead(A1))) / 1000000;
+    kp =  ((float)vc_read(analogRead(A2))) / 50;
+    ki = ((float)vc_read(analogRead(A1))) / 1000;
     kd = ((float)vc_read(analogRead(A0))) / 100;
 }
 
@@ -108,18 +135,18 @@ uint32_t tperiod()
 
 uint16_t f() //frequency
 {
-
     return 1000000 / t1;
 }
 
 float pout()
 {
-    return kp * setvalue;
+    error = setvalue - f();
+    return kp * error;
 }
 
 float iout()
 {
-    error = setvalue - f();
+    
     if(ki != 0)
     {
         if(pwm_out < 0 && error < 0){}
